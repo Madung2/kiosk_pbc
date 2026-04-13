@@ -19,6 +19,7 @@ BCC 계산:
 
 from dataclasses import dataclass
 from enum import IntEnum
+from typing import Literal
 from typing import Annotated, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -114,10 +115,10 @@ class FrameBuilder:
     """PCB로 보낼 시리얼 프레임을 조립하는 클래스."""
 
     @staticmethod
-    def _assemble_frame(payload: bytes) -> bytes:
+    def _assemble_frame(command_type: Literal["L", "S", "T", "P"], payload: bytes) -> bytes:
         """COMMAND+DATA 바이트열에 BCC를 계산해 STX·ETX로 감싼 전송 프레임을 만든다."""
         bcc = calc_bcc(payload)
-        return bytes([STX]) + payload + bytes([bcc, ETX])
+        return bytes([STX]) + bytes([ord(command_type)]) + payload + bytes([bcc, ETX])
 
     @staticmethod
     def build_control_frame(control: PcbControlState) -> bytes:
@@ -133,7 +134,6 @@ class FrameBuilder:
         b2 = _clamp_dc_brightness(control.dc_light_brightness2)
 
         payload = bytes([
-            CMD_CONTROL,
             int(control.ac_light1),
             int(control.ac_light2),
             int(control.dc_light1),
@@ -144,7 +144,7 @@ class FrameBuilder:
             int(control.speaker),
         ])
 
-        return FrameBuilder._assemble_frame(payload)
+        return FrameBuilder._assemble_frame("L", payload)
 
     @staticmethod
     def build_status_request_frame() -> bytes:
@@ -156,7 +156,7 @@ class FrameBuilder:
         Returns:
             전송용 bytes (STX ~ ETX)
         """
-        return FrameBuilder._assemble_frame(bytes([CMD_STATUS, DUMMY_BYTE]))
+        return FrameBuilder._assemble_frame("S", bytes([DUMMY_BYTE]))
 
     @staticmethod
     def build_gps_request_frame() -> bytes:
@@ -166,7 +166,8 @@ class FrameBuilder:
             전송용 bytes (STX ~ ETX)
         """
         return FrameBuilder._assemble_frame(
-            bytes([CMD_GPS_REQ, DUMMY_BYTE, DUMMY_BYTE])
+            "T",
+            bytes([DUMMY_BYTE, DUMMY_BYTE])
         )
 
     @staticmethod
@@ -176,7 +177,7 @@ class FrameBuilder:
         Returns:
             전송용 bytes (STX ~ ETX)
         """
-        return FrameBuilder._assemble_frame(bytes([CMD_GPS_POS, DUMMY_BYTE]))
+        return FrameBuilder._assemble_frame("P", bytes([DUMMY_BYTE]))
 
 
 # ──────────────────────────────────────────────
