@@ -95,6 +95,14 @@ unittest만 쓸 경우:
 uv run python -m unittest tests.test_protocol -v
 ```
 
+센서 없이 사람 감지 음성 재생만 빠르게 확인:
+
+```bash
+uv run python -c "import time; from kiosk_module.person_detected_audio import play_person_detected_audio_async; print(play_person_detected_audio_async()); time.sleep(5)"
+```
+
+`True`가 출력되면 재생 시작 요청이 성공한 상태이며, `time.sleep(5)`로 프로세스를 잠깐 유지해 실제 소리가 나오는지 확인합니다.
+
 ---
 
 ## 패키지 구조
