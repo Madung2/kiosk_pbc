@@ -50,7 +50,47 @@ async def run_kiosk(
 
     monitor = StatusMonitor(serial_mgr)
     input_tracker = InputActivityTracker(enabled=config.input_monitor_enabled)
-    light_scheduler = LightScheduler(controller)
+    light_scheduler: LightScheduler | None = None
+    if config.light_schedule_enabled:
+        ac_eff = config.light_schedule_ac_enabled and LightScheduler.is_valid_schedule(
+            config.light_schedule_ac_start, config.light_schedule_ac_end
+        )
+        dc_eff = config.light_schedule_dc_enabled and LightScheduler.is_valid_schedule(
+            config.light_schedule_dc_start, config.light_schedule_dc_end
+        )
+        if config.light_schedule_ac_enabled and not ac_eff:
+            logger.warning(
+                "LIGHT_SCHEDULE_AC_START/END 형식 오류(HH:MM) — AC 자동 스케줄을 쓰지 않습니다."
+            )
+        if config.light_schedule_dc_enabled and not dc_eff:
+            logger.warning(
+                "LIGHT_SCHEDULE_DC_START/END 형식 오류(HH:MM) — DC(디밍) 자동 스케줄을 쓰지 않습니다."
+            )
+        if ac_eff or dc_eff:
+            light_scheduler = LightScheduler(
+                controller,
+                ac_enabled=ac_eff,
+                ac_start_time=config.light_schedule_ac_start,
+                ac_end_time=config.light_schedule_ac_end,
+                dc_enabled=dc_eff,
+                dc_start_time=config.light_schedule_dc_start,
+                dc_end_time=config.light_schedule_dc_end,
+            )
+            parts = []
+            if ac_eff:
+                parts.append(
+                    f"AC {config.light_schedule_ac_start}~{config.light_schedule_ac_end}(구간 안=ON)"
+                )
+            if dc_eff:
+                parts.append(
+                    f"DC {config.light_schedule_dc_start}~{config.light_schedule_dc_end}(구간 안=ON)"
+                )
+            logger.info("조명 스케줄 활성: " + ", ".join(parts))
+        else:
+            logger.warning(
+                "조명 스케줄: AC·DC 모두 비활성이거나 시각 형식이 잘못되어 스케줄러를 쓰지 않습니다."
+            )
+
     bridge = create_ws_bridge(
         controller, monitor, light_scheduler=light_scheduler
     )

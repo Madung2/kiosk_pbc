@@ -14,11 +14,13 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "pydantic>=2.0",
     "pynput>=1.7.7",
+    "pycaw>=20251023",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8.0",
+    "pyinstaller>=6.0",
 ]
 gui = [
     "PyQt5>=5.15",

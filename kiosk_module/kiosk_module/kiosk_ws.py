@@ -50,7 +50,23 @@ def handle_ws_message(
                 f"[WS] light_time_control: start/end 는 문자열(HH:MM)이어야 합니다: {start} / {end}"
             )
             return
-        if not light_scheduler.try_update_schedule(start, end):
+        raw_scope = data.get("scope", "both")
+        if isinstance(raw_scope, str):
+            scope_key = raw_scope.strip().lower()
+        else:
+            scope_key = "both"
+        if scope_key in ("all", "both", ""):
+            scope = "both"
+        elif scope_key == "ac":
+            scope = "ac"
+        elif scope_key == "dc":
+            scope = "dc"
+        else:
+            logger.warning(
+                f"[WS] light_time_control: scope는 ac, dc, both(또는 all) 중 하나여야 합니다: {raw_scope!r}"
+            )
+            return
+        if not light_scheduler.try_update_schedule(start, end, scope=scope):
             return
         light_scheduler.schedule_check_and_control()
         return

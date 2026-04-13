@@ -5,12 +5,23 @@
 """
 
 import os
+import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 from dotenv import load_dotenv
 
-# .env 파일 로드
-load_dotenv()
+
+def _bootstrap_dotenv() -> None:
+    """PyInstaller .exe는 CWD가 불안정할 수 있어, 실행 파일 옆 ``.env``를 우선 로드."""
+    if getattr(sys, "frozen", False):
+        exe_dir = Path(sys.executable).resolve().parent
+        load_dotenv(exe_dir / ".env", override=True)
+    # 개발: 기존과 같이 CWD 기준 탐색(상위 디렉터리 포함). 이미 설정된 키는 덮어쓰지 않음.
+    load_dotenv(override=False)
+
+
+_bootstrap_dotenv()
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -18,6 +29,18 @@ def _env_bool(name: str, default: bool = False) -> bool:
     if v is None:
         return default
     return v.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _light_schedule_hhmm(env_name: str, legacy_name: str | None, default: str) -> str:
+    """채널 전용 HH:MM이 있으면 사용, 없으면 ``LIGHT_SCHEDULE_START``/``END`` 로 폴백."""
+    ch = (os.getenv(env_name) or "").strip()
+    if ch:
+        return ch
+    if legacy_name:
+        leg = (os.getenv(legacy_name) or "").strip()
+        if leg:
+            return leg
+    return default
 
 
 @dataclass
@@ -30,6 +53,8 @@ class Config:
     serial_port_description_keyword: str = os.getenv(
         "SERIAL_PORT_DESCRIPTION_KEYWORD", "USB"
     )
+    volume_serial_port: str = os.getenv("VOLUME_SERIAL_PORT", "COM5")
+    volume_serial_baudrate: int = int(os.getenv("VOLUME_SERIAL_BAUDRATE", "115200"))
 
     # 백엔드에서 키오스크 구분 (예: WS 이벤트 ``PERSON_DETECTED`` 페이로드)
     kiosk_id: str = (os.getenv("KIOSK_ID", "") or "").strip()
@@ -70,6 +95,24 @@ class Config:
         os.getenv("BACKGROUND_BROWSER_TIMEOUT_SECONDS", "300")
     )
 
+    # 조명 자동 스케줄 (로컬 시각 HH:MM). AC·DC(디밍) 각각 구간 **안**에서만 ON, 밖에서는 OFF.
+    # 채널별 시각을 비우면 구 ``LIGHT_SCHEDULE_START`` / ``LIGHT_SCHEDULE_END`` 로 폴백(하위 호환).
+    light_schedule_enabled: bool = _env_bool("LIGHT_SCHEDULE_ENABLED", default=True)
+    light_schedule_ac_enabled: bool = _env_bool("LIGHT_SCHEDULE_AC_ENABLED", default=True)
+    light_schedule_dc_enabled: bool = _env_bool("LIGHT_SCHEDULE_DC_ENABLED", default=True)
+    light_schedule_ac_start: str = _light_schedule_hhmm(
+        "LIGHT_SCHEDULE_AC_START", "LIGHT_SCHEDULE_START", "06:00"
+    )
+    light_schedule_ac_end: str = _light_schedule_hhmm(
+        "LIGHT_SCHEDULE_AC_END", "LIGHT_SCHEDULE_END", "00:00"
+    )
+    light_schedule_dc_start: str = _light_schedule_hhmm(
+        "LIGHT_SCHEDULE_DC_START", "LIGHT_SCHEDULE_START", "06:00"
+    )
+    light_schedule_dc_end: str = _light_schedule_hhmm(
+        "LIGHT_SCHEDULE_DC_END", "LIGHT_SCHEDULE_END", "00:00"
+    )
+
     # 로그
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
 
@@ -79,6 +122,7 @@ class Config:
             f"  kiosk_id={self.kiosk_id!r},\n"
             f"  serial={self.serial_port}@{self.serial_baudrate}, "
             f"port_kw={self.serial_port_description_keyword!r},\n"
+            f"  volume_serial={self.volume_serial_port}@{self.volume_serial_baudrate},\n"
             f"  ws_enabled={self.ws_enabled}, url={self.ws_url},\n"
             f"  poll={self.status_poll_interval}s,\n"
             f"  vacant_idle_close={self.vacant_idle_close_seconds}s,\n"
@@ -86,6 +130,9 @@ class Config:
             f"  input_monitor={self.input_monitor_enabled},\n"
             f"  meet_url_set={bool(self.meet_web_url)},\n"
             f"  browser_timeout={self.background_browser_timeout_seconds}s,\n"
+            f"  light_schedule={self.light_schedule_enabled} "
+            f"AC={self.light_schedule_ac_enabled} {self.light_schedule_ac_start}~{self.light_schedule_ac_end} "
+            f"DC={self.light_schedule_dc_enabled} {self.light_schedule_dc_start}~{self.light_schedule_dc_end},\n"
             f"  log={self.log_level}\n"
             f")"
         )
