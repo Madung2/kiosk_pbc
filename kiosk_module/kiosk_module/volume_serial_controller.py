@@ -124,7 +124,7 @@ def run(port: str | None = None, baudrate: int | None = None) -> None:
                     else:
                         logger.debug("무시된 입력: %r", msg)
         except serial.SerialException as exc:
-            logger.warning("시리얼 오류(%s). 2초 후 재연결 시도", exc)
+            logger.debug("시리얼 미연결/오류(%s). 2초 후 재연결 시도", exc)
             time.sleep(2)
 
 

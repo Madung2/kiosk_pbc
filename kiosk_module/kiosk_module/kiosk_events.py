@@ -56,7 +56,7 @@ class KioskMonitorHandlers:
         self._light_scheduler = light_scheduler
         self._vacancy_idle_closed = False
         self._input_log_at = 0.0
-        # 사람이 없었다가 다시 들어올 때만 환영(스피커·WS) 1회
+        # 사람이 없었다가 다시 들어올 때만 환영(음성·WS) 1회
         self._person_welcome_done_for_presence = False
 
     def bind(self) -> None:
@@ -74,13 +74,9 @@ class KioskMonitorHandlers:
         logger.info(f"[이벤트] 키보드/마우스 입력 감지")
 
     def on_status_received(self, status: StatusResponse) -> None:
-        self._controller.apply_pcb_status(status)
-
         if status.person_detected:
             self._vacancy_idle_closed = False
-            self._welcome_person_once_per_presence()
         else:
-            self._person_welcome_done_for_presence = False
             self._shutdown_meet_web_browser_on_absence()
 
         if not status.person_detected:
@@ -93,8 +89,10 @@ class KioskMonitorHandlers:
         logger.info(
             f"[이벤트] 사람 감지: {'감지됨' if detected else '없음'}"
         )
-        if detected and self._light_scheduler is not None:
-            self._light_scheduler.schedule_check_and_control()
+        if detected:
+            self._welcome_person_once_per_presence()
+        else:
+            self._person_welcome_done_for_presence = False
 
     def on_button_pressed(self, event: ButtonPressEvent) -> None:
         """PCB 버튼 0→눌림 엣진; 좌·우 로그는 분리하고 조합별 동작은 라우터가 맡김."""
@@ -123,28 +121,23 @@ class KioskMonitorHandlers:
     ###############################################
 
     def _welcome_person_once_per_presence(self) -> None:
-        """재실 구간당 1회: 스피커 ON + WebSocket ``PERSON_DETECTED``.
-
-        첫 폴링부터 ``on_status_received``에서 호출됩니다.
-        ``config.auto_open_door_on_person``이 꺼져 있으면 아무 것도 하지 않습니다.
-        """
-        if not config.auto_open_door_on_person:
-            return
+        """재실 구간당 1회: 사람 감지 안내 음성 + WebSocket ``PERSON_DETECTED``."""
         if self._person_welcome_done_for_presence:
             return
         self._person_welcome_done_for_presence = True
-        self._controller.set_speaker(True)
-        play_person_detected_audio_async()
+
+        audio_ok = play_person_detected_audio_async()
         if self._ws_bridge is not None:
             ws_body = person_detected_ws_payload()
             self._ws_bridge.schedule_send(ws_body)
             logger.info(
-                f"[동작] 사람 감지 구간 시작 → 음향 ON, WS "
+                f"[동작] 사람 감지 구간 시작 → 음성 {'재생' if audio_ok else '재생 실패'}, WS "
                 f"{json.dumps(ws_body, ensure_ascii=False)}"
             )
         else:
             logger.info(
-                f"[동작] 사람 감지 구간 시작 → 음향 ON (WebSocket 비활성화로 이벤트 미전송)"
+                f"[동작] 사람 감지 구간 시작 → 음성 {'재생' if audio_ok else '재생 실패'} "
+                f"(WebSocket 비활성화로 이벤트 미전송)"
             )
 
     def _shutdown_meet_web_browser_on_absence(self) -> None:
@@ -156,10 +149,9 @@ class KioskMonitorHandlers:
         if idle < config.vacant_idle_close_seconds or self._vacancy_idle_closed:
             return
         self._controller.close_door()
-        self._controller.set_speaker(False)
         self._vacancy_idle_closed = True
         logger.info(
-            f"사람 없음 + 입력 유휴 {idle:.1f}s 이상 → 도어 닫기 & 음향 중지"
+            f"사람 없음 + 입력 유휴 {idle:.1f}s 이상 → 도어 닫기"
         )
 
     def _open_door_on_left_only(self) -> None:

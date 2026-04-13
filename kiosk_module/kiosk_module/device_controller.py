@@ -109,24 +109,48 @@ class Controller:
         self._state = PcbControlState()
 
     def apply_pcb_status(self, status: StatusResponse) -> None:
-        """PCB 상태 응답으로 내부 제어 스냅샷을 맞춤.
+        """호환용 메서드.
 
-        이후 ``send_control``의 부분 갱신은 **이 스냅샷**을 기준으로 합쳐집니다.
-        상태 폴링마다 호출하는 것을 권장합니다.
+        제어 전송은 STATUS 값을 기준으로 병합하지 않고,
+        변경 없는 필드는 NO_CHANGE(9)로 송신합니다.
         """
-        self._state.ac_light1 = (
-            LightMode.ON if status.ac_light_status1 else LightMode.OFF
-        )
-        self._state.ac_light2 = (
-            LightMode.ON if status.ac_light_status2 else LightMode.OFF
-        )
-        self._state.dc_light1 = LightMode(status.dc_light_status1)
-        self._state.dc_light2 = LightMode(status.dc_light_status2)
-        self._state.dc_light_brightness1 = status.dc_light_brightness1
-        self._state.dc_light_brightness2 = status.dc_light_brightness2
-        self._state.door = DoorAction(status.door_status)
-        self._state.speaker = (
-            SpeakerMode.MAIN if status.speaker_status else SpeakerMode.OFF
+        _ = status
+
+    def _build_tx_state(self, changed_fields: set[str]) -> PcbControlState:
+        """송신용 상태 생성.
+
+        AC/DC/DOOR/SPK는 변경이 없으면 NO_CHANGE(9)로 보냅니다.
+        DC 밝기는 현재 스냅샷 값을 그대로 사용합니다.
+        """
+        return PcbControlState(
+            ac_light1=(
+                self._state.ac_light1
+                if "ac_light1" in changed_fields
+                else LightMode.NO_CHANGE
+            ),
+            ac_light2=(
+                self._state.ac_light2
+                if "ac_light2" in changed_fields
+                else LightMode.NO_CHANGE
+            ),
+            dc_light1=(
+                self._state.dc_light1
+                if "dc_light1" in changed_fields
+                else LightMode.NO_CHANGE
+            ),
+            dc_light2=(
+                self._state.dc_light2
+                if "dc_light2" in changed_fields
+                else LightMode.NO_CHANGE
+            ),
+            dc_light_brightness1=self._state.dc_light_brightness1,
+            dc_light_brightness2=self._state.dc_light_brightness2,
+            door=self._state.door if "door" in changed_fields else DoorAction.NO_CHANGE,
+            speaker=(
+                self._state.speaker
+                if "speaker" in changed_fields
+                else SpeakerMode.NO_CHANGE
+            ),
         )
 
     def send_control(self, control: PcbControlInput) -> bool:
@@ -142,11 +166,13 @@ class Controller:
         Returns:
             True = 전송 성공
         """
+        changed_fields = set()
         for name, value in control.model_dump(exclude_unset=True).items():
             if value is not None:
                 setattr(self._state, name, value)
+                changed_fields.add(name)
 
-        frame = FrameBuilder.build_control_frame(self._state)
+        frame = FrameBuilder.build_control_frame(self._build_tx_state(changed_fields))
 
         s = self._state
         logger.info(

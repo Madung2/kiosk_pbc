@@ -53,6 +53,7 @@ class LightMode(IntEnum):
     OFF = 0
     ON = 1
     DIMMING = 2  # DC 조명만 가능
+    NO_CHANGE = 9
 
 
 class DoorAction(IntEnum):
@@ -60,12 +61,14 @@ class DoorAction(IntEnum):
     OFF = 0
     OPEN = 1
     CLOSE = 2
+    NO_CHANGE = 9
 
 
 class SpeakerMode(IntEnum):
     """스피커 모드"""
     OFF = 0
     MAIN = 1
+    NO_CHANGE = 9
 
 
 @dataclass
@@ -115,10 +118,10 @@ class FrameBuilder:
     """PCB로 보낼 시리얼 프레임을 조립하는 클래스."""
 
     @staticmethod
-    def _assemble_frame(command_type: Literal["L", "S", "T", "P"], payload: bytes) -> bytes:
+    def _assemble_frame(payload: bytes) -> bytes:
         """COMMAND+DATA 바이트열에 BCC를 계산해 STX·ETX로 감싼 전송 프레임을 만든다."""
         bcc = calc_bcc(payload)
-        return bytes([STX]) + bytes([ord(command_type)]) + payload + bytes([bcc, ETX])
+        return bytes([STX]) + payload + bytes([bcc, ETX])
 
     @staticmethod
     def build_control_frame(control: PcbControlState) -> bytes:
@@ -134,6 +137,7 @@ class FrameBuilder:
         b2 = _clamp_dc_brightness(control.dc_light_brightness2)
 
         payload = bytes([
+            CMD_CONTROL,
             int(control.ac_light1),
             int(control.ac_light2),
             int(control.dc_light1),
@@ -144,7 +148,7 @@ class FrameBuilder:
             int(control.speaker),
         ])
 
-        return FrameBuilder._assemble_frame("L", payload)
+        return FrameBuilder._assemble_frame(payload)
 
     @staticmethod
     def build_status_request_frame() -> bytes:
@@ -156,7 +160,8 @@ class FrameBuilder:
         Returns:
             전송용 bytes (STX ~ ETX)
         """
-        return FrameBuilder._assemble_frame("S", bytes([DUMMY_BYTE]))
+        payload = bytes([CMD_STATUS, DUMMY_BYTE])
+        return FrameBuilder._assemble_frame(payload)
 
     @staticmethod
     def build_gps_request_frame() -> bytes:
@@ -165,10 +170,8 @@ class FrameBuilder:
         Returns:
             전송용 bytes (STX ~ ETX)
         """
-        return FrameBuilder._assemble_frame(
-            "T",
-            bytes([DUMMY_BYTE, DUMMY_BYTE])
-        )
+        payload = bytes([CMD_GPS_REQ, DUMMY_BYTE, DUMMY_BYTE])
+        return FrameBuilder._assemble_frame(payload)
 
     @staticmethod
     def build_gps_position_request_frame() -> bytes:
@@ -177,7 +180,8 @@ class FrameBuilder:
         Returns:
             전송용 bytes (STX ~ ETX)
         """
-        return FrameBuilder._assemble_frame("P", bytes([DUMMY_BYTE]))
+        payload = bytes([CMD_GPS_POS, DUMMY_BYTE])
+        return FrameBuilder._assemble_frame(payload)
 
 
 # ──────────────────────────────────────────────

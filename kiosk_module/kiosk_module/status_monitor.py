@@ -150,6 +150,11 @@ class StatusMonitor:
             except Exception as e:
                 logger.error(f"on_status_received 콜백 에러: {e}")
 
+        #########################테스트
+
+        self.on_person_detected(True)
+        ########################### 지워주세요
+
         # 변화 감지
         if self._last_status is not None:
             changed = self._has_changed(self._last_status, status)
