@@ -17,6 +17,7 @@ from .device_controller import Controllerer
 from .input_activity import InputActivityTracker
 from .protocol import ButtonPressEvent, StatusResponse
 from .light_scheduler import LightScheduler
+from .person_detected_audio import play_person_detected_audio_async
 from .status_monitor import StatusMonitor
 from .ws_bridge import WSBridge
 
@@ -133,6 +134,7 @@ class KioskMonitorHandlers:
             return
         self._person_welcome_done_for_presence = True
         self._controller.set_speaker(True)
+        play_person_detected_audio_async()
         if self._ws_bridge is not None:
             ws_body = person_detected_ws_payload()
             self._ws_bridge.schedule_send(ws_body)

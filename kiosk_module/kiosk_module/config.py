@@ -24,6 +24,13 @@ def _bootstrap_dotenv() -> None:
 _bootstrap_dotenv()
 
 
+def runtime_base_dir() -> Path:
+    """실행 기준 디렉터리(.env 상대 경로 기준)."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path.cwd()
+
+
 def _env_bool(name: str, default: bool = False) -> bool:
     v = os.getenv(name)
     if v is None:
@@ -81,6 +88,18 @@ class Config:
     auto_open_door_on_person: bool = _env_bool(
         "AUTO_OPEN_DOOR_ON_PERSON", default=True
     )
+    person_detected_mp3_path: str = (
+        os.getenv("PERSON_DETECTED_MP3_PATH", "person_detected.mp3") or ""
+    ).strip()
+    person_detected_tts_text: str = (
+        os.getenv("PERSON_DETECTED_TTS_TEXT", "") or os.getenv("tts_text", "") or ""
+    ).strip()
+    person_detected_tts_lang: str = (
+        os.getenv("PERSON_DETECTED_TTS_LANG", "ko") or "ko"
+    ).strip()
+    person_detected_tts_autogen: bool = _env_bool(
+        "PERSON_DETECTED_TTS_AUTOGEN", default=True
+    )
 
     # 키보드·마우스 전역 감지. false면 유휴 시간이 항상 0으로 취급되어 자동 도어 닫기가 동작하지 않음.
     input_monitor_enabled: bool = _env_bool(
@@ -127,6 +146,9 @@ class Config:
             f"  poll={self.status_poll_interval}s,\n"
             f"  vacant_idle_close={self.vacant_idle_close_seconds}s,\n"
             f"  auto_door_person={self.auto_open_door_on_person},\n"
+            f"  person_mp3={self.person_detected_mp3_path!r}, "
+            f"tts_text_set={bool(self.person_detected_tts_text)}, "
+            f"tts_autogen={self.person_detected_tts_autogen},\n"
             f"  input_monitor={self.input_monitor_enabled},\n"
             f"  meet_url_set={bool(self.meet_web_url)},\n"
             f"  browser_timeout={self.background_browser_timeout_seconds}s,\n"
